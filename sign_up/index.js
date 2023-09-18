@@ -3,9 +3,18 @@ const mysql = require('mysql2');
 const app = express();
 const port = 3000;
 const bcrypt = require('bcrypt');
+const session = require('express-session');
+const crypto = require('crypto');
+const secretKey = crypto.randomBytes(64).toString('hex');
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
+
+app.use(session({
+  secret: secretKey,
+  resave: false,
+  saveUninitialized: true,
+}));
 
 const connection = mysql.createConnection({
   host: 'localhost',
@@ -16,9 +25,9 @@ const connection = mysql.createConnection({
 
 connection.connect((err) => {
   if (err) {
-    console.error('Database connection error:', err.message);
+    console.error('User Database connection error:', err.message);
   } else {
-    console.log('Connected to the database.');
+    console.log('Connected to the User database.');
     const createTableQuery = `CREATE TABLE IF NOT EXISTS sign_in (
       id INT AUTO_INCREMENT PRIMARY KEY,
       username VARCHAR(255),
@@ -28,9 +37,9 @@ connection.connect((err) => {
 
     connection.query(createTableQuery, (err) => {
       if (err) {
-        console.error('Error creating table:', err.message);
+        console.error('Error creating user table:', err.message);
       } else {
-        console.log('Table created or already exists.');
+        console.log('User Table created or already exists.');
       }
     });
   }
@@ -63,43 +72,13 @@ app.post('/signup', (req, res) => {
   });
 });
 
-// app.post('/signup', (req, res) => {
-//   const { username, email, password } = req.body;
-//   const insertQuery = `INSERT INTO sign_in (username, email, password) VALUES (?, ?, ?)`;
-  
-//   connection.query(insertQuery, [username, email, password], (err, result) => {
-//     if (err) {
-//       console.error('Database insert error:', err.message);
-//       res.status(500).send('Error signing up.');
-//     } else {
-//       res.send('Signed up successfully!');
-//     }
-//   });
-// });
 
 app.get('/login', (req, res) => {
     res.sendFile(__dirname + '/views/login.html');
   });
   
-//   app.post('/login', (req, res) => {
-//     const { email, password } = req.body;
-//     const selectQuery = `SELECT * FROM sign_in WHERE email = ? AND password = ?`;
-    
-//     connection.query(selectQuery, [email, password], (err, results) => {
-//       if (err) {
-//         console.error('Database query error:', err.message);
-//         res.status(500).send('Error logging in.');
-//       } else {
-//         if (results.length === 1) {
-//           res.send('Login successful!');
-//         } else {
-//           res.send('Invalid email or password.');
-//         }
-//       }
-//     });
-//   });
 
-app.post('/login', (req, res) => {
+app.post('/login', (req, res, next) => {
   const { email, password } = req.body;
   const selectQuery = `SELECT * FROM sign_in WHERE email = ?`;
 
@@ -110,6 +89,7 @@ app.post('/login', (req, res) => {
     } else {
       if (results.length === 1) {
         const user = results[0];
+        req.session.email = email;
         
         // Compare provided password with hashed password
         bcrypt.compare(password, user.password, (bcryptErr, bcryptResult) => {
@@ -118,7 +98,9 @@ app.post('/login', (req, res) => {
             res.status(500).send('Error comparing passwords.');
           } else {
             if (bcryptResult) {
-              res.status(200).send('User login successful');
+              // Successful login, send the expense_tracker.html file
+              res.redirect("/addexpense");
+              //res.sendFile(__dirname + '/views/expense_tracker.html');
             } else {
               res.status(401).send('User not authorized');
             }
@@ -130,29 +112,54 @@ app.post('/login', (req, res) => {
     }
   });
 });
+app.get('/addexpense', (req, res) => {
+  res.sendFile(__dirname + '/views/expense_tracker.html');
+});
 
-  // app.post('/login', (req, res) => {
-  //   const { email, password } = req.body;
-  //   const selectQuery = `SELECT * FROM sign_in WHERE email = ?`;
-  
-  //   connection.query(selectQuery, [email], (err, results) => {
-  //     if (err) {
-  //       console.error('Database query error:', err.message);
-  //       res.status(500).send('Error logging in.');
-  //     } else {
-  //       if (results.length === 1) {
-  //         const user = results[0];
-  //         if (user.password === password) {
-  //           res.status(200).send('User login successful');
-  //         } else {
-  //           res.status(401).send('User not authorized');
-  //         }
-  //       } else {
-  //         res.status(404).send('User not found');
-  //       }
-  //     }
-  //   });
-  // });
+connection.connect((err) => {
+  if (err) {
+    console.error('Expense Database connection error:', err.message);
+  } else {
+    console.log('Connected to the expense database.');
+    const createTableQuery = `CREATE TABLE IF NOT EXISTS expenses (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      amount DECIMAL(10, 2),  -- Use DECIMAL for monetary values
+      description VARCHAR(255),
+      category VARCHAR(255),
+      date DATE,
+      userID VARCHAR(255),
+
+      FOREIGN KEY (userID) REFERENCES sign_in(email)
+    )`;
+
+    connection.query(createTableQuery, (err) => {
+      if (err) {
+        console.error('Error creating expense table:', err.message);
+      } else {
+        console.log('Expense Table created or already exists.');
+      }
+    });
+  }
+});
+
+
+app.post('/addexpense', (req, res) => {
+  const { amount, description, category, email} = req.body;
+  const userID = req.body.email; 
+
+  const insertQuery = `INSERT INTO expenses (amount, description, category, userID) VALUES (?, ?, ?, ?)`;
+
+  connection.query(insertQuery, [amount, description, category, email], (err) => {
+    if (err) {
+      console.error('Database insert error:', err.message);
+      res.status(500).send('Error adding expense.');
+    } else {
+      res.send('Expense added successfully!');
+    }
+  });
+});
+
+
 
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);

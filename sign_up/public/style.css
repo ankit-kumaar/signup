@@ -6,19 +6,20 @@ body {
     justify-content: center;
     align-items: center;
     min-height: 100vh;
-    background-color: #f0f0f0;
+    background-color: #616262;
   }
   
   form {
-    border: 1px solid #ccc;
-    padding: 20px;
-    background-color: #fff;
+    border: 1px solid #f1e3e3;
+    padding: 100px;
+    background-color: #e5d5d5;
     border-radius: 5px;
     box-shadow: 0px 2px 5px rgba(0, 0, 0, 0.1);
   }
   
   label {
     font-weight: bold;
+    color: #121111;
   }
   
   input {
